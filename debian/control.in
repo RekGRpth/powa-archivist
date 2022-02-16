@@ -2,7 +2,9 @@ Source: powa-archivist
 Section: database
 Priority: optional
 Maintainer: Debian PostgreSQL Maintainers <team+postgresql@tracker.debian.org>
-Uploaders: Christoph Berg <myon@debian.org>
+Uploaders:
+ Christoph Berg <myon@debian.org>,
+ Julien Rouhaud <rjuju123@gmail.com>,
 Standards-Version: 4.5.0
 Rules-Requires-Root: no
 Build-Depends: debhelper-compat (= 13),
@@ -13,7 +15,7 @@ Vcs-Git: https://github.com/powa-team/powa-archivist.git
 
 Package: postgresql-PGVERSION-powa
 Architecture: any
-Depends: ${misc:Depends}, ${shlibs:Depends}, postgresql-PGVERSION
+Depends: ${misc:Depends}, ${shlibs:Depends}, postgresql-PGVERSION, postgresql-contrib-PGVERSION
 Provides: postgresql-powa
 Suggests: powa-web, powa-collector
 Description: PostgreSQL Workload Analyzer -- PostgreSQL PGVERSION extension
