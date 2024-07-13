@@ -1,0 +1,425 @@
+-- General setup
+\set SHOW_CONTEXT never
+-- Check the relations that aren't dumped
+-- we ignore *_src_tmp are those should never be dumped
+WITH ext AS (
+    SELECT c.oid, c.relname
+    FROM pg_depend d
+    JOIN pg_extension e ON d.refclassid = 'pg_extension'::regclass
+        AND e.oid = d.refobjid
+        AND e.extname = 'powa'
+    JOIN pg_class c ON d.classid = 'pg_class'::regclass
+        AND c.oid = d.objid
+    WHERE c.relkind != 'v'
+),
+dmp AS (
+    SELECT unnest(extconfig) AS oid
+    FROM pg_extension
+    WHERE extname = 'powa'
+)
+SELECT ext.relname
+FROM ext
+LEFT JOIN dmp USING (oid)
+WHERE dmp.oid IS NULL
+AND ext.relname NOT LIKE '%src_tmp'
+ORDER BY ext.relname::text COLLATE "C";
+         relname          
+--------------------------
+ powa_catalog_src_queries
+ powa_catalogs
+ powa_modules
+ powa_roles
+ powa_servers_id_seq
+(5 rows)
+
+-- Check that no *_src_tmp table are dumped
+WITH ext AS (
+    SELECT c.oid, c.relname
+    FROM pg_depend d
+    JOIN pg_extension e ON d.refclassid = 'pg_extension'::regclass
+        AND e.oid = d.refobjid
+        AND e.extname = 'powa'
+    JOIN pg_class c ON d.classid = 'pg_class'::regclass
+        AND c.oid = d.objid
+    WHERE c.relkind != 'v'
+),
+dmp AS (
+    SELECT unnest(extconfig) AS oid
+    FROM pg_extension
+    WHERE extname = 'powa'
+)
+SELECT ext.relname
+FROM ext
+LEFT JOIN dmp USING (oid)
+WHERE dmp.oid IS NOT NULL
+AND ext.relname LIKE '%src_tmp'
+ORDER BY ext.relname::text COLLATE "C";
+ relname 
+---------
+(0 rows)
+
+-- Check for object that aren't in the "PoWA" schema
+WITH ext AS (
+    SELECT pg_describe_object(classid, objid, objsubid) AS descr
+    FROM pg_depend d
+    JOIN pg_extension e ON d.refclassid = 'pg_extension'::regclass
+        AND e.oid = d.refobjid
+        AND e.extname = 'powa'
+)
+SELECT descr
+FROM ext
+WHERE descr NOT LIKE '%"PoWA"%'
+ORDER BY descr COLLATE "C";
+                    descr                    
+---------------------------------------------
+ event trigger powa_check_created_extensions
+ event trigger powa_check_dropped_extensions
+(2 rows)
+
+-- check (mins|maxs)_in_range columns not marked as STORAGE MAIN
+WITH ext AS (
+    SELECT c.oid, c.relname
+    FROM pg_depend d
+    JOIN pg_extension e ON d.refclassid = 'pg_extension'::regclass
+        AND e.oid = d.refobjid
+        AND e.extname = 'powa'
+    JOIN pg_class c ON d.classid = 'pg_class'::regclass
+        AND c.oid = d.objid
+    WHERE c.relkind != 'v'
+)
+SELECT ext.relname, a.attname
+FROM ext
+JOIN pg_attribute a ON a.attrelid = ext.oid
+WHERE a.attname ~ '(mins|maxs)'
+AND a.attstorage != 'm'
+ORDER BY ext.relname::text COLLATE "C", a.attname::text COLLATe "C";
+ relname | attname 
+---------+---------
+(0 rows)
+
+-- Aggregate data every 5 snapshots
+SET powa.coalesce = 5;
+-- Test created ojects
+SELECT * FROM "PoWA".powa_functions ORDER BY name, operation, priority, function_name;
+ srvid |   kind    |            name            | operation | external |             function_name              |           query_source           | query_cleanup | enabled | priority 
+-------+-----------+----------------------------+-----------+----------+----------------------------------------+----------------------------------+---------------+---------+----------
+     0 | module    | pg_database                | reset     | f        | powa_catalog_database_reset            |                                  |               | t       |      100
+     0 | module    | pg_database                | snapshot  | f        | powa_catalog_database_snapshot         | powa_catalog_database_src        |               | t       |      100
+     0 | module    | pg_replication_slots       | aggregate | f        | powa_replication_slots_aggregate       |                                  |               | t       |      100
+     0 | module    | pg_replication_slots       | purge     | f        | powa_replication_slots_purge           |                                  |               | t       |      100
+     0 | module    | pg_replication_slots       | reset     | f        | powa_replication_slots_reset           |                                  |               | t       |      100
+     0 | module    | pg_replication_slots       | snapshot  | f        | powa_replication_slots_snapshot        | powa_replication_slots_src       |               | t       |      100
+     0 | module    | pg_role                    | reset     | f        | powa_catalog_role_reset                |                                  |               | t       |      100
+     0 | module    | pg_role                    | snapshot  | f        | powa_catalog_role_snapshot             | powa_catalog_role_src            |               | t       |      100
+     0 | module    | pg_stat_activity           | aggregate | f        | powa_stat_activity_aggregate           |                                  |               | t       |      100
+     0 | module    | pg_stat_activity           | purge     | f        | powa_stat_activity_purge               |                                  |               | t       |      100
+     0 | module    | pg_stat_activity           | reset     | f        | powa_stat_activity_reset               |                                  |               | t       |      100
+     0 | module    | pg_stat_activity           | snapshot  | f        | powa_stat_activity_snapshot            | powa_stat_activity_src           |               | t       |      100
+     0 | module    | pg_stat_archiver           | aggregate | f        | powa_stat_archiver_aggregate           |                                  |               | t       |      100
+     0 | module    | pg_stat_archiver           | purge     | f        | powa_stat_archiver_purge               |                                  |               | t       |      100
+     0 | module    | pg_stat_archiver           | reset     | f        | powa_stat_archiver_reset               |                                  |               | t       |      100
+     0 | module    | pg_stat_archiver           | snapshot  | f        | powa_stat_archiver_snapshot            | powa_stat_archiver_src           |               | t       |      100
+     0 | module    | pg_stat_bgwriter           | aggregate | f        | powa_stat_bgwriter_aggregate           |                                  |               | t       |      100
+     0 | module    | pg_stat_bgwriter           | purge     | f        | powa_stat_bgwriter_purge               |                                  |               | t       |      100
+     0 | module    | pg_stat_bgwriter           | reset     | f        | powa_stat_bgwriter_reset               |                                  |               | t       |      100
+     0 | module    | pg_stat_bgwriter           | snapshot  | f        | powa_stat_bgwriter_snapshot            | powa_stat_bgwriter_src           |               | t       |      100
+     0 | module    | pg_stat_checkpointer       | aggregate | f        | powa_stat_checkpointer_aggregate       |                                  |               | t       |      100
+     0 | module    | pg_stat_checkpointer       | purge     | f        | powa_stat_checkpointer_purge           |                                  |               | t       |      100
+     0 | module    | pg_stat_checkpointer       | reset     | f        | powa_stat_checkpointer_reset           |                                  |               | t       |      100
+     0 | module    | pg_stat_checkpointer       | snapshot  | f        | powa_stat_checkpointer_snapshot        | powa_stat_checkpointer_src       |               | t       |      100
+     0 | module    | pg_stat_database           | aggregate | f        | powa_stat_database_aggregate           |                                  |               | t       |      100
+     0 | module    | pg_stat_database           | purge     | f        | powa_stat_database_purge               |                                  |               | t       |      100
+     0 | module    | pg_stat_database           | reset     | f        | powa_stat_database_reset               |                                  |               | t       |      100
+     0 | module    | pg_stat_database           | snapshot  | f        | powa_stat_database_snapshot            | powa_stat_database_src           |               | t       |      100
+     0 | module    | pg_stat_database_conflicts | aggregate | f        | powa_stat_database_conflicts_aggregate |                                  |               | t       |      100
+     0 | module    | pg_stat_database_conflicts | purge     | f        | powa_stat_database_conflicts_purge     |                                  |               | t       |      100
+     0 | module    | pg_stat_database_conflicts | reset     | f        | powa_stat_database_conflicts_reset     |                                  |               | t       |      100
+     0 | module    | pg_stat_database_conflicts | snapshot  | f        | powa_stat_database_conflicts_snapshot  | powa_stat_database_conflicts_src |               | t       |      100
+     0 | module    | pg_stat_io                 | aggregate | f        | powa_stat_io_aggregate                 |                                  |               | t       |      100
+     0 | module    | pg_stat_io                 | purge     | f        | powa_stat_io_purge                     |                                  |               | t       |      100
+     0 | module    | pg_stat_io                 | reset     | f        | powa_stat_io_reset                     |                                  |               | t       |      100
+     0 | module    | pg_stat_io                 | snapshot  | f        | powa_stat_io_snapshot                  | powa_stat_io_src                 |               | t       |      100
+     0 | module    | pg_stat_replication        | aggregate | f        | powa_stat_replication_aggregate        |                                  |               | t       |      100
+     0 | module    | pg_stat_replication        | purge     | f        | powa_stat_replication_purge            |                                  |               | t       |      100
+     0 | module    | pg_stat_replication        | reset     | f        | powa_stat_replication_reset            |                                  |               | t       |      100
+     0 | module    | pg_stat_replication        | snapshot  | f        | powa_stat_replication_snapshot         | powa_stat_replication_src        |               | t       |      100
+     0 | module    | pg_stat_slru               | aggregate | f        | powa_stat_slru_aggregate               |                                  |               | t       |      100
+     0 | module    | pg_stat_slru               | purge     | f        | powa_stat_slru_purge                   |                                  |               | t       |      100
+     0 | module    | pg_stat_slru               | reset     | f        | powa_stat_slru_reset                   |                                  |               | t       |      100
+     0 | module    | pg_stat_slru               | snapshot  | f        | powa_stat_slru_snapshot                | powa_stat_slru_src               |               | t       |      100
+     0 | extension | pg_stat_statements         | aggregate | f        | powa_statements_aggregate              |                                  |               | t       |       10
+     0 | extension | pg_stat_statements         | purge     | f        | powa_databases_purge                   |                                  |               | t       |       10
+     0 | extension | pg_stat_statements         | purge     | f        | powa_statements_purge                  |                                  |               | t       |       10
+     0 | extension | pg_stat_statements         | reset     | f        | powa_statements_reset                  |                                  |               | t       |       10
+     0 | extension | pg_stat_statements         | snapshot  | f        | powa_databases_snapshot                | powa_databases_src               |               | t       |       -3
+     0 | extension | pg_stat_statements         | snapshot  | f        | powa_statements_snapshot               | powa_statements_src              |               | t       |       -2
+     0 | module    | pg_stat_subscription       | aggregate | f        | powa_stat_subscription_aggregate       |                                  |               | t       |      100
+     0 | module    | pg_stat_subscription       | purge     | f        | powa_stat_subscription_purge           |                                  |               | t       |      100
+     0 | module    | pg_stat_subscription       | reset     | f        | powa_stat_subscription_reset           |                                  |               | t       |      100
+     0 | module    | pg_stat_subscription       | snapshot  | f        | powa_stat_subscription_snapshot        | powa_stat_subscription_src       |               | t       |      100
+     0 | module    | pg_stat_subscription_stats | aggregate | f        | powa_stat_subscription_stats_aggregate |                                  |               | t       |      100
+     0 | module    | pg_stat_subscription_stats | purge     | f        | powa_stat_subscription_stats_purge     |                                  |               | t       |      100
+     0 | module    | pg_stat_subscription_stats | reset     | f        | powa_stat_subscription_stats_reset     |                                  |               | t       |      100
+     0 | module    | pg_stat_subscription_stats | snapshot  | f        | powa_stat_subscription_stats_snapshot  | powa_stat_subscription_stats_src |               | t       |      100
+     0 | module    | pg_stat_wal                | aggregate | f        | powa_stat_wal_aggregate                |                                  |               | t       |      100
+     0 | module    | pg_stat_wal                | purge     | f        | powa_stat_wal_purge                    |                                  |               | t       |      100
+     0 | module    | pg_stat_wal                | reset     | f        | powa_stat_wal_reset                    |                                  |               | t       |      100
+     0 | module    | pg_stat_wal                | snapshot  | f        | powa_stat_wal_snapshot                 | powa_stat_wal_src                |               | t       |      100
+     0 | module    | pg_stat_wal_receiver       | aggregate | f        | powa_stat_wal_receiver_aggregate       |                                  |               | t       |      100
+     0 | module    | pg_stat_wal_receiver       | purge     | f        | powa_stat_wal_receiver_purge           |                                  |               | t       |      100
+     0 | module    | pg_stat_wal_receiver       | reset     | f        | powa_stat_wal_receiver_reset           |                                  |               | t       |      100
+     0 | module    | pg_stat_wal_receiver       | snapshot  | f        | powa_stat_wal_receiver_snapshot        | powa_stat_wal_receiver_src       |               | t       |      100
+(66 rows)
+
+-- test C SRFs
+SELECT COUNT(*) = 0
+FROM pg_database,
+LATERAL "PoWA".powa_stat_user_functions(oid) f
+WHERE datname = current_database();
+ ?column? 
+----------
+ t
+(1 row)
+
+-- on pg15+ the function is a no-op, and this function will be deprecated soon
+-- anyway
+SELECT COUNT(*) >= 0
+FROM pg_database,
+LATERAL "PoWA".powa_stat_all_rel(oid)
+WHERE datname = current_database();
+ ?column? 
+----------
+ t
+(1 row)
+
+-- Test snapshot
+SELECT 1, COUNT(*) = 0 FROM "PoWA".powa_user_functions_history_current;
+ ?column? | ?column? 
+----------+----------
+        1 | t
+(1 row)
+
+SELECT 1, COUNT(*) = 0 FROM "PoWA".powa_all_tables_history_current;
+ ?column? | ?column? 
+----------+----------
+        1 | t
+(1 row)
+
+SELECT 1, COUNT(*) = 0 FROM "PoWA".powa_statements_history_current;
+ ?column? | ?column? 
+----------+----------
+        1 | t
+(1 row)
+
+SELECT 1, COUNT(*) = 0 FROM "PoWA".powa_statements_history_current_db;
+ ?column? | ?column? 
+----------+----------
+        1 | t
+(1 row)
+
+SELECT 1, COUNT(*) = 0 FROM "PoWA".powa_user_functions_history;
+ ?column? | ?column? 
+----------+----------
+        1 | t
+(1 row)
+
+SELECT 1, COUNT(*) = 0 FROM "PoWA".powa_all_tables_history;
+ ?column? | ?column? 
+----------+----------
+        1 | t
+(1 row)
+
+SELECT 1, COUNT(*) = 0 FROM "PoWA".powa_statements_history;
+ ?column? | ?column? 
+----------+----------
+        1 | t
+(1 row)
+
+SELECT 1, COUNT(*) = 0 FROM "PoWA".powa_statements_history;
+ ?column? | ?column? 
+----------+----------
+        1 | t
+(1 row)
+
+SELECT "PoWA".powa_take_snapshot();
+ powa_take_snapshot 
+--------------------
+                  0
+(1 row)
+
+SELECT 2, COUNT(*) >= 0 FROM "PoWA".powa_user_functions_history_current;
+ ?column? | ?column? 
+----------+----------
+        2 | t
+(1 row)
+
+SELECT 2, COUNT(*) >= 0 FROM "PoWA".powa_all_tables_history_current;
+ ?column? | ?column? 
+----------+----------
+        2 | t
+(1 row)
+
+SELECT 2, COUNT(*) > 0 FROM "PoWA".powa_statements_history_current;
+ ?column? | ?column? 
+----------+----------
+        2 | t
+(1 row)
+
+SELECT 2, COUNT(*) > 0 FROM "PoWA".powa_statements_history_current_db;
+ ?column? | ?column? 
+----------+----------
+        2 | t
+(1 row)
+
+SELECT 2, COUNT(*) >= 0 FROM "PoWA".powa_user_functions_history;
+ ?column? | ?column? 
+----------+----------
+        2 | t
+(1 row)
+
+SELECT 2, COUNT(*) = 0 FROM "PoWA".powa_all_tables_history;
+ ?column? | ?column? 
+----------+----------
+        2 | t
+(1 row)
+
+SELECT 2, COUNT(*) = 0 FROM "PoWA".powa_statements_history;
+ ?column? | ?column? 
+----------+----------
+        2 | t
+(1 row)
+
+SELECT 2, COUNT(*) = 0 FROM "PoWA".powa_statements_history;
+ ?column? | ?column? 
+----------+----------
+        2 | t
+(1 row)
+
+SELECT "PoWA".powa_take_snapshot();
+ powa_take_snapshot 
+--------------------
+                  0
+(1 row)
+
+SELECT "PoWA".powa_take_snapshot();
+ powa_take_snapshot 
+--------------------
+                  0
+(1 row)
+
+SELECT "PoWA".powa_take_snapshot();
+ powa_take_snapshot 
+--------------------
+                  0
+(1 row)
+
+-- This snapshot will trigger the aggregate
+SELECT "PoWA".powa_take_snapshot();
+ powa_take_snapshot 
+--------------------
+                  0
+(1 row)
+
+SELECT 3, COUNT(*) >= 0 FROM "PoWA".powa_user_functions_history_current;
+ ?column? | ?column? 
+----------+----------
+        3 | t
+(1 row)
+
+SELECT 3, COUNT(*) >= 0 FROM "PoWA".powa_all_tables_history_current;
+ ?column? | ?column? 
+----------+----------
+        3 | t
+(1 row)
+
+SELECT 3, COUNT(*) > 0 FROM "PoWA".powa_statements_history_current;
+ ?column? | ?column? 
+----------+----------
+        3 | t
+(1 row)
+
+SELECT 3, COUNT(*) > 0 FROM "PoWA".powa_statements_history_current_db;
+ ?column? | ?column? 
+----------+----------
+        3 | t
+(1 row)
+
+SELECT 3, COUNT(*) >= 0 FROM "PoWA".powa_user_functions_history;
+ ?column? | ?column? 
+----------+----------
+        3 | t
+(1 row)
+
+SELECT 3, COUNT(*) >= 0 FROM "PoWA".powa_all_tables_history;
+ ?column? | ?column? 
+----------+----------
+        3 | t
+(1 row)
+
+SELECT 3, COUNT(*) > 0 FROM "PoWA".powa_statements_history;
+ ?column? | ?column? 
+----------+----------
+        3 | t
+(1 row)
+
+SELECT 3, COUNT(*) > 0 FROM "PoWA".powa_statements_history;
+ ?column? | ?column? 
+----------+----------
+        3 | t
+(1 row)
+
+-- Test reset function
+SELECT * from "PoWA".powa_reset(0);
+ powa_reset 
+------------
+ t
+(1 row)
+
+SELECT 4, COUNT(*) = 0 FROM "PoWA".powa_user_functions_history_current;
+ ?column? | ?column? 
+----------+----------
+        4 | t
+(1 row)
+
+SELECT 4, COUNT(*) = 0 FROM "PoWA".powa_all_tables_history_current;
+ ?column? | ?column? 
+----------+----------
+        4 | t
+(1 row)
+
+SELECT 4, COUNT(*) = 0 FROM "PoWA".powa_statements_history_current;
+ ?column? | ?column? 
+----------+----------
+        4 | t
+(1 row)
+
+SELECT 4, COUNT(*) = 0 FROM "PoWA".powa_statements_history_current_db;
+ ?column? | ?column? 
+----------+----------
+        4 | t
+(1 row)
+
+SELECT 4, COUNT(*) = 0 FROM "PoWA".powa_user_functions_history;
+ ?column? | ?column? 
+----------+----------
+        4 | t
+(1 row)
+
+SELECT 4, COUNT(*) = 0 FROM "PoWA".powa_all_tables_history;
+ ?column? | ?column? 
+----------+----------
+        4 | t
+(1 row)
+
+SELECT 4, COUNT(*) = 0 FROM "PoWA".powa_statements_history;
+ ?column? | ?column? 
+----------+----------
+        4 | t
+(1 row)
+
+SELECT 4, COUNT(*) = 0 FROM "PoWA".powa_statements_history;
+ ?column? | ?column? 
+----------+----------
+        4 | t
+(1 row)
+
