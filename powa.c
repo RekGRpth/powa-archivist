@@ -52,6 +52,10 @@
 /* rename process */
 #include "utils/ps_status.h"
 
+#if PG_VERSION_NUM >= 190000
+#include "utils/tuplestore.h"
+#endif
+
 PG_MODULE_MAGIC;
 
 #define POWA_STAT_FUNC_COLS	4	/* # of cols for functions stat SRF */
