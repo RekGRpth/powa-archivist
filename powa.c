@@ -45,6 +45,7 @@
 
 /* We use tuplestore */
 #include "funcapi.h"
+#include "utils/tuplestore.h"
 
 /* pgsats access */
 #include "pgstat.h"
